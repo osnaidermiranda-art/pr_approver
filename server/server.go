@@ -116,6 +116,7 @@ func (s *Server) HandlePullRequest(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	defer r.Body.Close()
 	if err != nil {
+		log.Printf("Error reading body: %v", err)
 		s.writeJSON(w, http.StatusInternalServerError, GitHubResponse{
 			Message: err.Error(),
 			Status:  "error",
@@ -126,6 +127,7 @@ func (s *Server) HandlePullRequest(w http.ResponseWriter, r *http.Request) {
 	bodyRequest := GitHubRequest{}
 	err = json.Unmarshal(body, &bodyRequest)
 	if err != nil {
+		log.Printf("Error unmarshalling body: %v", err)
 		s.writeJSON(w, http.StatusInternalServerError, GitHubResponse{
 			Message: err.Error(),
 			Status:  "error",
@@ -135,6 +137,7 @@ func (s *Server) HandlePullRequest(w http.ResponseWriter, r *http.Request) {
 
 	owner, repo, prNumber, err := s.parseGitHubPRUrl(bodyRequest.Url)
 	if err != nil {
+		log.Printf("Error parsing GitHub PR URL: %v", err)
 		s.writeJSON(w, http.StatusBadRequest, GitHubResponse{
 			Message: err.Error(),
 			Status:  "error",
@@ -148,6 +151,7 @@ func (s *Server) HandlePullRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !validActions[action] {
+		log.Printf("Invalid action: %s", action)
 		s.writeJSON(w, http.StatusBadRequest, GitHubResponse{
 			Message: ErrInvalidAction.Error(),
 			Status:  "error",
@@ -158,6 +162,7 @@ func (s *Server) HandlePullRequest(w http.ResponseWriter, r *http.Request) {
 	if action == APPROVE || action == BOTH {
 		err = s.approvePullRequest(r, owner, repo, prNumber)
 		if err != nil {
+			log.Printf("Error approving pull request: %v", err)
 			s.writeJSON(w, http.StatusInternalServerError, GitHubResponse{
 				Message: ErrFailedToApprovePr.Error(),
 				Status:  "error",
@@ -169,6 +174,7 @@ func (s *Server) HandlePullRequest(w http.ResponseWriter, r *http.Request) {
 	if action == MERGE || action == BOTH {
 		err = s.mergePullRequest(r, owner, repo, prNumber)
 		if err != nil {
+			log.Printf("Error merging pull request: %v", err)
 			s.writeJSON(w, http.StatusInternalServerError, GitHubResponse{
 				Message: ErrFailedToMergePr.Error(),
 				Status:  "error",
@@ -182,6 +188,7 @@ func (s *Server) HandlePullRequest(w http.ResponseWriter, r *http.Request) {
 		MERGE:   "Pull request merged",
 		BOTH:    "Pull request approved and merged",
 	}
+	log.Printf("Pull request %s completed successfully", action)
 	s.writeJSON(w, http.StatusOK, GitHubResponse{
 		Message: messages[action],
 		Status:  "success",
