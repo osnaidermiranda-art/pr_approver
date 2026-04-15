@@ -22,9 +22,10 @@ RUN apk --no-cache add ca-certificates \
 WORKDIR /app
 
 COPY --from=builder /app/server .
+RUN chmod +x /app/server
 
 USER app
 
 EXPOSE 8080
 
-ENTRYPOINT ["./server"]
+ENTRYPOINT ["/app/server"]
