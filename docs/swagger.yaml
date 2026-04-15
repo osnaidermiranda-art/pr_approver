@@ -1,0 +1,84 @@
+basePath: /
+definitions:
+  ErrorResponse:
+    properties:
+      message:
+        example: Invalid action
+        type: string
+      status:
+        example: error
+        type: string
+    type: object
+  GitHubRequest:
+    properties:
+      action:
+        enum:
+        - approve
+        - merge
+        - both
+        example: both
+        type: string
+      url:
+        example: https://github.com/G97-TECH-MKT/my-repo/pull/42
+        type: string
+    type: object
+  SuccessResponse:
+    properties:
+      message:
+        example: Pull request approved and merged
+        type: string
+      status:
+        example: success
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: Service to approve and merge GitHub pull requests
+  title: PR Approved API
+  version: "1.0"
+paths:
+  /git-hub:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Approve, merge, or approve and merge a GitHub pull request from the G97-TECH-MKT organization.
+        If no action is provided, defaults to "both" (approve + squash merge).
+
+        **Allowed actions:**
+        - `approve` — Approves the pull request
+        - `merge` — Squash merges the pull request
+        - `both` — Approves and then squash merges (default)
+
+        **URL format:** `https://github.com/G97-TECH-MKT/{repo}/pull/{number}`
+      parameters:
+      - description: Pull request action payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/GitHubRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Action completed successfully
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        "400":
+          description: Invalid URL, repository, or action
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "405":
+          description: Method not allowed (only POST)
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: Failed to approve or merge the pull request
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Perform actions on a GitHub pull request
+      tags:
+      - pull-requests
+swagger: "2.0"
