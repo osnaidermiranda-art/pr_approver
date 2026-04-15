@@ -8,6 +8,8 @@ services:
     env_file:
       - .env
     environment:
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      VALID_REPOS: ${VALID_REPOS}
       # Ajuste del GC: 100 = balance entre uso de memoria y frecuencia de GC
       GOGC: "100"
       # Limite de memoria para el GC antes de forzar recoleccion
