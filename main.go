@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 	_ "pr_approved/docs"
 
 	httpSwagger "github.com/swaggo/http-swagger"
@@ -16,11 +17,16 @@ import (
 // @host localhost:8080
 // @BasePath /
 func main() {
-	log.Println("Starting server on port 8080")
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	log.Println("Starting server on port " + port)
 	srv := server.NewServer()
 
 	http.HandleFunc("/git-hub", srv.HandlePullRequest)
 	http.HandleFunc("/", httpSwagger.WrapHandler)
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
