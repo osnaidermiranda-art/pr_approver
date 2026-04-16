@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	docs "pr_approved/docs"
 
@@ -26,6 +27,9 @@ func main() {
 	if host == "" {
 		host = "localhost:" + port
 	}
+	// Strip scheme if accidentally included (e.g. "https://example.com" -> "example.com")
+	host = strings.TrimPrefix(host, "https://")
+	host = strings.TrimPrefix(host, "http://")
 
 	docs.SwaggerInfo.Host = host
 	docs.SwaggerInfo.Schemes = []string{"https", "http"}
