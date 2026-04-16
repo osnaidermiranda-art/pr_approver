@@ -4,7 +4,8 @@ import (
 	"log"
 	"net/http"
 	"os"
-	_ "pr_approved/docs"
+
+	docs "pr_approved/docs"
 
 	httpSwagger "github.com/swaggo/http-swagger"
 
@@ -14,7 +15,6 @@ import (
 // @title PR Approved API
 // @version 1.0
 // @description Service to approve and merge GitHub pull requests
-// @host localhost:8080
 // @BasePath /
 func main() {
 	port := os.Getenv("PORT")
@@ -22,11 +22,33 @@ func main() {
 		port = "8080"
 	}
 
+	host := os.Getenv("HOST")
+	if host == "" {
+		host = "localhost:" + port
+	}
+
+	docs.SwaggerInfo.Host = host
+	docs.SwaggerInfo.Schemes = []string{"https", "http"}
+
 	log.Println("Starting server on port " + port)
 	srv := server.NewServer()
 
-	http.HandleFunc("/git-hub", srv.HandlePullRequest)
-	http.HandleFunc("/", httpSwagger.WrapHandler)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/git-hub", srv.HandlePullRequest)
+	mux.HandleFunc("/", httpSwagger.WrapHandler)
 
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+	log.Fatal(http.ListenAndServe(":"+port, corsMiddleware(mux)))
+}
+
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
