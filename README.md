@@ -1,10 +1,10 @@
 # PR Approved
 
-A lightweight HTTP service written in Go that automates GitHub pull request actions — approve, merge, or both — for repositories inside the `G97-TECH-MKT` organization.
+A lightweight HTTP service written in Go that automates GitHub pull request actions — approve, merge, or both — supporting multiple GitHub accounts via per-organization tokens.
 
 ## How it works
 
-The service exposes a single `POST /git-hub` endpoint. You send a PR URL and an action, and the service calls the GitHub API on your behalf using a personal access token.
+The service exposes a `POST /git-hub` endpoint. You send a PR URL and an action, and the service calls the GitHub API on your behalf using the token configured for that organization.
 
 ```
 POST /git-hub
@@ -36,13 +36,10 @@ POST /git-hub
 
 **200 OK**
 ```json
-{
-  "message": "Pull request approved and merged",
-  "status": "success"
-}
+{ "message": "Pull request approved and merged", "status": "success" }
 ```
 
-**400 Bad Request** — invalid URL, repository outside `G97-TECH-MKT`, or unknown action.
+**400 Bad Request** — invalid URL, organization not in `VALID_OWNERS`, no token configured for that organization, or unknown action.
 
 **405 Method Not Allowed** — only `POST` is accepted.
 
@@ -50,7 +47,7 @@ POST /git-hub
 
 ### Swagger UI
 
-Interactive API docs are available at the root path:
+Interactive API docs available at:
 
 ```
 http://localhost:8080/
@@ -61,29 +58,47 @@ http://localhost:8080/
 ## Requirements
 
 - Go 1.25+
-- A GitHub personal access token with `repo` and `pull_request` scopes
-- Docker (optional, for containerized runs)
+- A GitHub personal access token per organization with `repo` scope
+- Docker (optional)
+
+---
+
+## Setup
+
+```bash
+cp .env.example .env
+# Fill in your tokens in .env
+```
+
+---
+
+## Environment variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `GITHUB_TOKEN_<OWNER>` | yes (at least one) | Token for the GitHub org/user. Replace `<OWNER>` with the org name uppercased and `-` replaced by `_`. Example: `GITHUB_TOKEN_G97_TECH_MKT` |
+| `VALID_OWNERS` | yes | Comma-separated list of allowed GitHub organization names (e.g. `G97-TECH-MKT,InnerPro-Sports`) |
+
+### Token naming convention
+
+| Organization | Environment variable |
+|---|---|
+| `G97-TECH-MKT` | `GITHUB_TOKEN_G97_TECH_MKT` |
+| `InnerPro-Sports` | `GITHUB_TOKEN_INNERPRO_SPORTS` |
 
 ---
 
 ## Running locally
 
-### With Go
+### With Make
 
 ```bash
-cp .env.example .env
-# Fill in your GITHUB_TOKEN in .env
-
-export $(cat .env | xargs)
-go run main.go
+make run
 ```
 
 ### With Docker Compose
 
 ```bash
-cp .env.example .env
-# Fill in your GITHUB_TOKEN in .env
-
 docker compose up --build
 ```
 
@@ -91,12 +106,16 @@ The service will be available at `http://localhost:8080`.
 
 ---
 
-## Environment variables
+## Development
 
-| Variable       | Required | Description |
-|----------------|----------|-------------|
-| `GITHUB_TOKEN` | yes      | GitHub personal access token used to authenticate API calls |
-| `VALID_REPOS`  | yes      | Comma-separated list of allowed GitHub organization names (e.g. `G97-TECH-MKT,another-org`) |
+```bash
+make test      # run all tests
+make test-v    # verbose output
+make lint      # go vet
+make build     # compile binary
+make tidy      # go mod tidy
+make clean     # remove binary
+```
 
 ---
 
@@ -104,11 +123,18 @@ The service will be available at `http://localhost:8080`.
 
 ```
 .
-├── main.go          # Entry point — registers routes and starts the HTTP server
-├── server/
-│   └── server.go    # Request handler, GitHub API calls, URL parsing
-├── docs/
-│   └── docs.go      # Auto-generated Swagger spec (do not edit manually)
+├── main.go                        # Entry point — wiring and server startup
+├── internal/
+│   ├── handler/
+│   │   ├── github.go              # HTTP layer: parse requests, write responses
+│   │   └── dto.go                 # Request/response types
+│   ├── service/
+│   │   ├── github.go              # Business logic: orchestrate approve/merge
+│   │   └── errors.go              # Domain errors
+│   └── ghclient/
+│       └── client.go              # GitHub API adapter (wraps go-github)
+├── docs/                          # Auto-generated Swagger spec (do not edit)
+├── Makefile
 ├── Dockerfile
 ├── docker-compose.yml
 └── .env.example
@@ -122,7 +148,7 @@ The service will be available at `http://localhost:8080`.
 2. Go to [render.com](https://render.com) → **New** → **Web Service**.
 3. Connect your GitHub repository.
 4. Set **Port** to `8080` — Render will detect the `Dockerfile` automatically.
-5. Add the environment variable `GITHUB_TOKEN` under **Environment Variables**.
+5. Add your `GITHUB_TOKEN_<OWNER>` and `VALID_OWNERS` environment variables.
 6. Click **Create Web Service**.
 
 Once deployed, your service will be live at:

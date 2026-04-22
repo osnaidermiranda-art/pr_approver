@@ -1,58 +1,105 @@
 package main
 
 import (
-	"log"
+	"context"
+	"errors"
+	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	_ "pr_approved/docs"
 	"strings"
+	"syscall"
+	"time"
 
-	docs "pr_approved/docs"
-
+	"github.com/joho/godotenv"
 	httpSwagger "github.com/swaggo/http-swagger"
 
-	"pr_approved/server"
+	"pr_approved/internal/ghclient"
+	"pr_approved/internal/handler"
+	"pr_approved/internal/service"
 )
+
+const githubTokenPrefix = "GITHUB_TOKEN_"
 
 // @title PR Approved API
 // @version 1.0
 // @description Service to approve and merge GitHub pull requests
+// @host localhost:8080
 // @BasePath /
 func main() {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
+	_ = godotenv.Load()
 
-	host := os.Getenv("HOST")
-	if host == "" {
-		host = "localhost:" + port
-	}
-	// Strip scheme if accidentally included (e.g. "https://example.com" -> "example.com")
-	host = strings.TrimPrefix(host, "https://")
-	host = strings.TrimPrefix(host, "http://")
+	clients := buildClients()
+	validOwners := buildValidOwners()
 
-	docs.SwaggerInfo.Host = host
-	docs.SwaggerInfo.Schemes = []string{"https", "http"}
-
-	log.Println("Starting server on port " + port)
-	srv := server.NewServer()
+	svc := service.NewGitHubService(clients, validOwners)
+	gh := handler.NewGitHubHandler(svc)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/git-hub", srv.HandlePullRequest)
+	mux.HandleFunc("POST /git-hub", gh.HandlePullRequest)
 	mux.HandleFunc("/", httpSwagger.WrapHandler)
 
-	log.Fatal(http.ListenAndServe(":"+port, corsMiddleware(mux)))
+	srv := &http.Server{
+		Addr:    ":8080",
+		Handler: mux,
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	slog.Info("server starting", "addr", ":8080")
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("server error", "err", err)
+			os.Exit(1)
+		}
+	}()
+
+	<-ctx.Done()
+	slog.Info("shutting down")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		slog.Error("shutdown error", "err", err)
+		os.Exit(1)
+	}
+
+	slog.Info("server stopped")
 }
 
-func corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
+func buildClients() map[string]ghclient.Client {
+	clients := make(map[string]ghclient.Client)
+
+	for _, env := range os.Environ() {
+		key, token, ok := strings.Cut(env, "=")
+		if !ok || !strings.HasPrefix(key, githubTokenPrefix) || token == "" {
+			continue
 		}
-		next.ServeHTTP(w, r)
-	})
+		owner := strings.ToLower(strings.ReplaceAll(strings.TrimPrefix(key, githubTokenPrefix), "_", "-"))
+		clients[owner] = ghclient.New(token)
+	}
+
+	if len(clients) == 0 {
+		slog.Error("no GitHub tokens found", "prefix", githubTokenPrefix)
+		os.Exit(1)
+	}
+
+	return clients
+}
+
+func buildValidOwners() map[string]bool {
+	raw := os.Getenv("VALID_OWNERS")
+	if raw == "" {
+		slog.Error("VALID_OWNERS environment variable is required")
+		os.Exit(1)
+	}
+	owners := make(map[string]bool)
+	for r := range strings.SplitSeq(raw, ",") {
+		owners[strings.TrimSpace(r)] = true
+	}
+	return owners
 }
