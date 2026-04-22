@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	_ "pr_approved/docs"
+	docs "pr_approved/docs"
 	"strings"
 	"syscall"
 	"time"
@@ -25,10 +25,25 @@ const githubTokenPrefix = "GITHUB_TOKEN_"
 // @title PR Approved API
 // @version 1.0
 // @description Service to approve and merge GitHub pull requests
-// @host localhost:8080
 // @BasePath /
 func main() {
 	_ = godotenv.Load()
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	host := os.Getenv("HOST")
+	if host == "" {
+		host = "localhost:" + port
+	}
+
+	host = strings.TrimPrefix(host, "http://")
+	host = strings.TrimPrefix(host, "https://")
+
+	docs.SwaggerInfo.Host = host
+	docs.SwaggerInfo.Schemes = []string{"http", "https"}
 
 	clients := buildClients()
 	validOwners := buildValidOwners()
@@ -41,14 +56,14 @@ func main() {
 	mux.HandleFunc("/", httpSwagger.WrapHandler)
 
 	srv := &http.Server{
-		Addr:    ":8080",
-		Handler: mux,
+		Addr:    ":" + port,
+		Handler: corsMiddleware(mux),
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	slog.Info("server starting", "addr", ":8080")
+	slog.Info("server starting", "addr", host)
 
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -102,4 +117,19 @@ func buildValidOwners() map[string]bool {
 		owners[strings.TrimSpace(r)] = true
 	}
 	return owners
+}
+
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
