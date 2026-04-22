@@ -43,7 +43,7 @@ func main() {
 	host = strings.TrimPrefix(host, "https://")
 
 	docs.SwaggerInfo.Host = host
-	docs.SwaggerInfo.Schemes = []string{"http", "https"}
+	docs.SwaggerInfo.Schemes = []string{"https", "http"}
 
 	clients := buildClients()
 	validOwners := buildValidOwners()
