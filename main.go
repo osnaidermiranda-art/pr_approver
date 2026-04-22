@@ -114,7 +114,7 @@ func buildValidOwners() map[string]bool {
 	}
 	owners := make(map[string]bool)
 	for r := range strings.SplitSeq(raw, ",") {
-		owners[strings.TrimSpace(r)] = true
+		owners[strings.ToLower(strings.TrimSpace(r))] = true
 	}
 	return owners
 }
